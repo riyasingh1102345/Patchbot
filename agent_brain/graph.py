@@ -1,6 +1,7 @@
 # agent_brain/graph.py
 import os
 import sys
+import hashlib
 
 # Cross-Platform Path Guard: Forcefully inject the repository root into Python's search paths
 repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -14,14 +15,37 @@ from agent_brain.state import PatchBotState
 from agent_brain.planner import planner_node
 from agent_brain.evaluator import evaluator_node
 
+# Stateful in-memory tracker mapping: patch_id -> set of unique error string hashes
+SEEN_ERROR_HASHES = {}
+
 def route_evaluation_results(state: PatchBotState) -> str:
     """Conditional routing engine that acts as the state machine's traffic cop.
-    Intercepts degradation and routes execution to rollback instead of a raw exit.
+    Intercepts degradation and loops via cryptographic signature tracking.
     """
     if state.get("is_final"):
         print("🏁 [Router] Test suite passed perfectly. Terminating loop sequence gracefully.")
         return "end"
         
+    patch_id = state.get("patch_id")
+    current_errors = state.get("test_failures", "")
+    
+    # 🛡️ SYSTEM GUARD: Error String Fingerprinting (Loop Detection)
+    if current_errors:
+        # Generate a unique, deterministic SHA-256 fingerprint of the terminal log dump
+        error_hash = hashlib.sha256(current_errors.strip().encode("utf-8")).hexdigest()
+        
+        if patch_id not in SEEN_ERROR_HASHES:
+            SEEN_ERROR_HASHES[patch_id] = set()
+            
+        # If this exact error signature has been witnessed before, the agent is thrashing
+        if error_hash in SEEN_ERROR_HASHES[patch_id]:
+            print(f"🚨 [Router] Infinite Loop Detected! Error signature matches a previous run. Triggering Early Rollback on step {state.get('revision_count')}!")
+            return "rollback"
+            
+        # Log the unique hash fingerprint to catch future duplicate cycles
+        SEEN_ERROR_HASHES[patch_id].add(error_hash)
+
+    # Fallback Step-Budget Tracker
     current_cycle = state.get("revision_count", 0)
     max_cycles = state.get("max_revisions", 3)
     
@@ -40,20 +64,15 @@ def rollback_node(state: PatchBotState) -> dict:
     print("🛡️ [Node: Rollback] Initiating time-travel rollback sequence...")
     patch_id = state["patch_id"]
     
-    # 1. Imperative Systems Clean: Force-evict physical worktree and terminate containers
     from mcp_sandbox.mcp_server import ACTIVE_SANDBOXES, sandbox
     if patch_id in ACTIVE_SANDBOXES:
         meta = ACTIVE_SANDBOXES[patch_id]
         print(f"🧹 [Rollback] Evicting corrupted physical directory path: {meta['worktree_path']}")
         
-        # Command our core system client directly to dismantle the sandboxed infrastructure
         sandbox.cleanup_sandbox(meta["container_id"])
         sandbox.cleanup_worktree(patch_id, meta["worktree_path"])
         del ACTIVE_SANDBOXES[patch_id]
         
-    # 2. Semantic State Reset
-    # We maintain the overall compilation diagnostics list for systemic logging,
-    # but wipe out the broken current patch and code state variables to safely exit.
     print("⏳ [Rollback] Synchronizing checkpointer ledger. Rewinding environment properties back to baseline safety.")
     return {
         "current_patch": "",
@@ -93,4 +112,4 @@ workflow.add_edge("rollback_node", END)
 memory = MemorySaver()
 patchbot_app = workflow.compile(checkpointer=memory)
 
-print("🦅 LangGraph State Machine successfully compiled with Time-Travel Rollback capabilities.")
+print("🦅 LangGraph State Machine successfully compiled with Cryptographic Hashing Guards.")
