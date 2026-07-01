@@ -1,6 +1,6 @@
 # agent_brain/planner.py
 import os
-from langchain_anthropic import ChatAnthropic
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import SystemMessage, HumanMessage
 from agent_brain.state import PatchBotState
 
@@ -18,11 +18,12 @@ def planner_node(state: PatchBotState) -> dict:
     print("🧠 [Node: Planner] Analyzing vulnerability state and compiling recommendations...")
     
     # Initialize the high-performance model layer
-    # Expects ANTHROPIC_API_KEY to be set in your local .env file
-    llm = ChatAnthropic(
-        model_name="claude-3-5-sonnet-latest",
-        temperature=0.0  # Greedy decoding for deterministic engineering adjustments
+    # Expects gemini key to be set in your local .env file
+    llm = ChatGoogleGenerativeAI(
+    model="gemini-2.5-flash", # The fastest, free-tier model on AI Studio
+    temperature=0.0
     )
+
     
     # Compile the conversational history context payload
     messages = [

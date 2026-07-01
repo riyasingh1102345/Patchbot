@@ -1,7 +1,7 @@
 # agent_brain/evaluator.py
 import os
 import json
-from langchain_anthropic import ChatAnthropic
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.messages import SystemMessage, HumanMessage
 from agent_brain.state import PatchBotState
 from mcp_sandbox.mcp_server import ACTIVE_SANDBOXES, sandbox
@@ -52,11 +52,12 @@ def evaluator_node(state: PatchBotState) -> dict:
     )
     decoded_logs = stream_output.decode("utf-8", errors="replace")
 
-    # 3. Pass the raw terminal outputs to Claude to verify compliance
-    llm = ChatAnthropic(
-        model_name="claude-3-5-sonnet-latest",
-        temperature=0.0
+    # 3. Pass the raw terminal outputs to Gemini to verify compliance
+    llm = ChatGoogleGenerativeAI(
+    model="gemini-2.5-flash", # The fastest, free-tier model on AI Studio
+    temperature=0.0
     )
+
     
     verification_prompt = f"""
     Review the following test execution results for Patch ID [{patch_id}].
