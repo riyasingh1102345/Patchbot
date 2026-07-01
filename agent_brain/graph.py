@@ -14,6 +14,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from agent_brain.state import PatchBotState
 from agent_brain.planner import planner_node
 from agent_brain.evaluator import evaluator_node
+from agent_brain.pr_gate import pr_gate_node
 
 # Stateful in-memory tracker mapping: patch_id -> set of unique error string hashes
 SEEN_ERROR_HASHES = {}
@@ -23,26 +24,23 @@ def route_evaluation_results(state: PatchBotState) -> str:
     Intercepts degradation and loops via cryptographic signature tracking.
     """
     if state.get("is_final"):
-        print("🏁 [Router] Test suite passed perfectly. Terminating loop sequence gracefully.")
-        return "end"
+        print("🏁 [Router] Test suite passed perfectly. Routing execution state to PR Gate Node.")
+        return "deploy"
         
     patch_id = state.get("patch_id")
     current_errors = state.get("test_failures", "")
     
-    # 🛡️ SYSTEM GUARD: Error String Fingerprinting (Loop Detection)
+    # SYSTEM GUARD: Error String Fingerprinting (Loop Detection)
     if current_errors:
-        # Generate a unique, deterministic SHA-256 fingerprint of the terminal log dump
         error_hash = hashlib.sha256(current_errors.strip().encode("utf-8")).hexdigest()
         
         if patch_id not in SEEN_ERROR_HASHES:
             SEEN_ERROR_HASHES[patch_id] = set()
             
-        # If this exact error signature has been witnessed before, the agent is thrashing
         if error_hash in SEEN_ERROR_HASHES[patch_id]:
             print(f"🚨 [Router] Infinite Loop Detected! Error signature matches a previous run. Triggering Early Rollback on step {state.get('revision_count')}!")
             return "rollback"
             
-        # Log the unique hash fingerprint to catch future duplicate cycles
         SEEN_ERROR_HASHES[patch_id].add(error_hash)
 
     # Fallback Step-Budget Tracker
@@ -89,6 +87,7 @@ workflow = StateGraph(PatchBotState)
 workflow.add_node("planner_node", planner_node)
 workflow.add_node("evaluator_node", evaluator_node)
 workflow.add_node("rollback_node", rollback_node)
+workflow.add_node("pr_gate_node", pr_gate_node)
 
 # Map the structural execution wires
 workflow.add_edge(START, "planner_node")
@@ -101,15 +100,16 @@ workflow.add_conditional_edges(
     {
         "continue": "planner_node",
         "rollback": "rollback_node",
-        "end": END
+        "deploy": "pr_gate_node"
     }
 )
 
-# Connect the rollback completion directly to graph termination
+# Connect system output nodes explicitly to final graph termination boundaries
 workflow.add_edge("rollback_node", END)
+workflow.add_edge("pr_gate_node", END)
 
 # Compile the state machine with memory tracking
 memory = MemorySaver()
 patchbot_app = workflow.compile(checkpointer=memory)
 
-print("🦅 LangGraph State Machine successfully compiled with Cryptographic Hashing Guards.")
+print("🦅 LangGraph State Machine successfully compiled with Automated GitHub PR Gate Capabilities.")
