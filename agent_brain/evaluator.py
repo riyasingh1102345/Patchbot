@@ -52,12 +52,21 @@ def evaluator_node(state: PatchBotState) -> dict:
     )
     decoded_logs = stream_output.decode("utf-8", errors="replace")
 
-    # 3. Pass the raw terminal outputs to Gemini to verify compliance
-    llm = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash", # The fastest, free-tier model on AI Studio
-    temperature=0.0
-    )
+    # 🛡️ THE FIX: Deterministic Short-Circuit
+    # If the raw system exit code is 0, the tests passed. 
+    # Do not ask the AI for its opinion. Bypass the LLM and approve the PR instantly.
+    if exit_code == 0:
+        print("✅ [Evaluator Decision] System Exit Code 0 detected. Tests passed perfectly. Bypassing LLM validation.")
+        return {
+            "test_failures": "All tests passed successfully.",
+            "is_final": True
+        }
 
+    # 3. If tests failed (exit code != 0), ONLY THEN do we ask the LLM to diagnose the logs
+    llm = ChatGoogleGenerativeAI(
+        model="gemini-2.5-flash", # The fastest, free-tier model on AI Studio
+        temperature=0.0
+    )
     
     verification_prompt = f"""
     Review the following test execution results for Patch ID [{patch_id}].

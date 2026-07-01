@@ -9,7 +9,9 @@ PLANNER_SYSTEM_PROMPT = """You are PatchBot-Planner, a world-class low-level sof
 
 Your job is to read CVE reports, analyze source code, and use your tools to draft precise security patches. Do not rewrite whole modules; write minimal, high-efficiency adjustments. 
 
-Prioritize preventing injection vulnerabilities, memory leaks, and bounds-checking errors. Always use your available sandbox tools to read and understand surrounding code files before proposing any patch content."""
+Prioritize preventing injection vulnerabilities, memory leaks, and bounds-checking errors. Always use your available sandbox tools to read and understand surrounding code files before proposing any patch content.
+
+IMPORTANT: Output ONLY valid, raw Python code. Do not wrap your response in markdown code blocks (e.g., no ```python or ```) or include any conversational filler."""
 
 def planner_node(state: PatchBotState) -> dict:
     """The execution node for the Planner agent. 
@@ -20,11 +22,10 @@ def planner_node(state: PatchBotState) -> dict:
     # Initialize the high-performance model layer
     # Expects gemini key to be set in your local .env file
     llm = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash", # The fastest, free-tier model on AI Studio
-    temperature=0.0
+        model="gemini-2.5-flash", # The fastest, free-tier model on AI Studio
+        temperature=0.0
     )
 
-    
     # Compile the conversational history context payload
     messages = [
         SystemMessage(content=PLANNER_SYSTEM_PROMPT),
@@ -45,11 +46,16 @@ Previous Execution Compilation/Test Failures:
     # Invoke the model
     response = llm.invoke(messages)
     
+    # 🛡️ THE FIX: Programmatic Markdown Stripper
+    # Strips out any accidental formatting tags if the model hallucinates them
+    clean_patch = response.content.strip()
+    clean_patch = clean_patch.removeprefix("```python").removeprefix("```").removesuffix("```").strip()
+    
     # Update state tracking metrics safely
     current_revisions = state.get("revision_count", 0)
     
     # Return the dictionary payload that LangGraph merges into the global state
     return {
-        "current_patch": response.content,
+        "current_patch": clean_patch,
         "revision_count": current_revisions + 1
     }
