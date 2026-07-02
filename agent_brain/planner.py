@@ -46,8 +46,23 @@ Previous Execution Compilation/Test Failures:
     # Invoke the model
     response = llm.invoke(messages)
     
-    # 🛡️ THE FIX: Programmatic Markdown Stripper
-    # Strips out any accidental formatting tags if the model hallucinates them
+    usage = getattr(response, "usage_metadata", None) or {}
+    new_in = usage.get("input_tokens", 0)
+    new_out = usage.get("output_tokens", 0)
+    
+    # Fallback to Google's raw SDK metadata keys
+    if new_in == 0 and new_out == 0:
+        resp_meta = getattr(response, "response_metadata", {})
+        
+        # Google nests this under 'usage_metadata' in the raw payload, not 'token_usage'
+        raw_usage = resp_meta.get("usage_metadata", {})
+        
+        # Gemini uses '*_token_count', not '*_tokens'
+        new_in = raw_usage.get("prompt_token_count", 0)
+        new_out = raw_usage.get("candidates_token_count", 0)
+
+    
+    # Strip potential markdown wrapping blocks if the model hallucinations them
     clean_patch = response.content.strip()
     clean_patch = clean_patch.removeprefix("```python").removeprefix("```").removesuffix("```").strip()
     
@@ -57,5 +72,9 @@ Previous Execution Compilation/Test Failures:
     # Return the dictionary payload that LangGraph merges into the global state
     return {
         "current_patch": clean_patch,
-        "revision_count": current_revisions + 1
+        "revision_count": current_revisions + 1,
+        "total_input_tokens": state.get("total_input_tokens", 0) + new_in,
+        "total_output_tokens": state.get("total_output_tokens", 0) + new_out
     }
+
+

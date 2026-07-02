@@ -23,3 +23,6 @@ class PatchBotState(TypedDict):
     revision_count: int
     max_revisions: int
     is_final: bool
+
+    total_input_tokens: int
+    total_output_tokens: int

@@ -1,17 +1,26 @@
 [
     {
-        "run_id": "BENCH-RUN-1",
-        "execution_time_sec": 62.909438125090674,
-        "resolved": true
+        "run_id": "CVE-RUN-F5CCFD",
+        "execution_time_sec": 57.69153749999896,
+        "resolved": true,
+        "revisions_needed": 3,
+        "input_tokens": 2914,
+        "output_tokens": 9656
     },
     {
-        "run_id": "BENCH-RUN-2",
-        "execution_time_sec": 44.06094529200345,
-        "resolved": true
+        "run_id": "CVE-RUN-232779",
+        "execution_time_sec": 50.3529875000022,
+        "resolved": true,
+        "revisions_needed": 2,
+        "input_tokens": 1596,
+        "output_tokens": 8457
     },
     {
-        "run_id": "BENCH-RUN-3",
-        "execution_time_sec": 31.070518958964385,
-        "resolved": true
+        "run_id": "CVE-RUN-148E43",
+        "execution_time_sec": 41.919984600001044,
+        "resolved": true,
+        "revisions_needed": 2,
+        "input_tokens": 1596,
+        "output_tokens": 6778
     }
 ]

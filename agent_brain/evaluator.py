@@ -52,7 +52,6 @@ def evaluator_node(state: PatchBotState) -> dict:
     )
     decoded_logs = stream_output.decode("utf-8", errors="replace")
 
-    # 🛡️ THE FIX: Deterministic Short-Circuit
     # If the raw system exit code is 0, the tests passed. 
     # Do not ask the AI for its opinion. Bypass the LLM and approve the PR instantly.
     if exit_code == 0:
@@ -60,7 +59,9 @@ def evaluator_node(state: PatchBotState) -> dict:
         return {
             "test_failures": "All tests passed successfully.",
             "is_final": True
+            # LangGraph will safely preserve the existing total_input_tokens in the state!
         }
+
 
     # 3. If tests failed (exit code != 0), ONLY THEN do we ask the LLM to diagnose the logs
     llm = ChatGoogleGenerativeAI(
@@ -87,16 +88,32 @@ def evaluator_node(state: PatchBotState) -> dict:
         SystemMessage(content=EVALUATOR_SYSTEM_PROMPT),
         HumanMessage(content=verification_prompt)
     ])
+
+    
+    
+    usage = getattr(response, "usage_metadata", None) or {}
+    new_in = usage.get("input_tokens", 0)
+    new_out = usage.get("output_tokens", 0)
+    
+    # Fallback to Google's raw SDK metadata keys
+    if new_in == 0 and new_out == 0:
+        resp_meta = getattr(response, "response_metadata", {})
+        
+        # Google nests this under 'usage_metadata' in the raw payload, not 'token_usage'
+        raw_usage = resp_meta.get("usage_metadata", {})
+        
+        # Gemini uses '*_token_count', not '*_tokens'
+        new_in = raw_usage.get("prompt_token_count", 0)
+        new_out = raw_usage.get("candidates_token_count", 0)
+
     
     # 4. Parse the structural judgment safely
     try:
-        # Strip potential markdown wrapping blocks if the LLM includes them
         clean_content = response.content.strip().removeprefix("```json").removesuffix("```").strip()
         decision = json.loads(clean_content)
         is_final = decision.get("is_final", False)
         rationale = decision.get("rationale", "")
     except Exception:
-        # Fallback safety default if JSON parsing fails
         is_final = True if exit_code == 0 else "TIMEOUT" not in decoded_logs and False
         rationale = "Fallback parsing executed based on raw exit code."
 
@@ -105,5 +122,7 @@ def evaluator_node(state: PatchBotState) -> dict:
     return {
         "compiler_diagnostics": [f"Run {state.get('revision_count', 1)}: {rationale}"],
         "test_failures": decoded_logs if not is_final else "",
-        "is_final": is_final
+        "is_final": is_final,
+        "total_input_tokens": state.get("total_input_tokens", 0) + new_in,
+        "total_output_tokens": state.get("total_output_tokens", 0) + new_out
     }
