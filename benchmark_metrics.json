@@ -1,0 +1,17 @@
+[
+    {
+        "run_id": "BENCH-RUN-1",
+        "execution_time_sec": 62.909438125090674,
+        "resolved": true
+    },
+    {
+        "run_id": "BENCH-RUN-2",
+        "execution_time_sec": 44.06094529200345,
+        "resolved": true
+    },
+    {
+        "run_id": "BENCH-RUN-3",
+        "execution_time_sec": 31.070518958964385,
+        "resolved": true
+    }
+]
