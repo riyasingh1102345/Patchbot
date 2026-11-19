@@ -1,4 +1,5 @@
 import sqlite3
+import ast
 from fastapi import FastAPI, Form
 from fastapi.responses import HTMLResponse
 
@@ -50,14 +51,49 @@ def home():
 
 @app.post("/user")
 def lookup_user(username: str = Form(...)):
-    # VULNERABILITY 1 (CWE-89): Unparameterized SQL query vulnerable to SQL Injection
-    query = f"SELECT id, username, role FROM users WHERE username = '{username}'"
-    rows = conn.execute(query).fetchall()
+    # FIXED (CWE-89): Parameterized query to prevent SQL Injection
+    query = "SELECT id, username, role FROM users WHERE username = ?"
+    rows = conn.execute(query, (username,)).fetchall()
     return {"query_executed": query, "results": rows}
 
 
 @app.post("/calculate")
 def calculate_fee(formula: str = Form(...)):
-    # VULNERABILITY 2 (CWE-95): Arbitrary code execution via eval()
-    result = eval(formula)
+    # FIXED (CWE-95): Safe expression evaluation using ast.literal_eval or safe AST parsing
+    def eval_node(node):
+        if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+            return node.value
+        elif isinstance(node, ast.Num):  # Compatibility for older Python versions
+            return node.n
+        elif isinstance(node, ast.BinOp):
+            left = eval_node(node.left)
+            right = eval_node(node.right)
+            if isinstance(node.op, ast.Add):
+                return left + right
+            elif isinstance(node.op, ast.Sub):
+                return left - right
+            elif isinstance(node.op, ast.Mult):
+                return left * right
+            elif isinstance(node.op, ast.Div):
+                return left / right
+            elif isinstance(node.op, ast.FloorDiv):
+                return left // right
+            elif isinstance(node.op, ast.Mod):
+                return left % right
+            elif isinstance(node.op, ast.Pow):
+                return left ** right
+        elif isinstance(node, ast.UnaryOp):
+            operand = eval_node(node.operand)
+            if isinstance(node.op, ast.UAdd):
+                return +operand
+            elif isinstance(node.op, ast.USub):
+                return -operand
+        raise ValueError("Unsupported or unsafe expression")
+
+    try:
+        parsed_ast = ast.parse(formula.strip(), mode='eval')
+        result = eval_node(parsed_ast.body)
+    except Exception as e:
+        result = f"Error evaluating formula: {str(e)}"
+
     return {"formula": formula, "result": result}
